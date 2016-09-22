@@ -29,3 +29,4 @@ COPY bin ./
 COPY target/open-gateway-0.1.0.jar bin/
 
 CMD cd bin && ./run-og.sh
+
