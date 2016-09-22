@@ -1,4 +1,4 @@
-FROM resin/%%RESIN_MACHINE_NAME%%-debian
+FROM resin/armv7hf-debian
 MAINTAINER Shaun Mulligan <shaun@resin.io>
 
 RUN apt-get update && apt-get -y install wget git
