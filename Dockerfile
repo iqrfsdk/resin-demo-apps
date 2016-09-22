@@ -23,7 +23,7 @@ RUN cd opt && \
 
 WORKDIR /opt/resin-demo-apps/resin-open-gateway
 
-RUN mvn clean install
+RUN mvn -U clean install
 
 COPY bin ./
 COPY target/open-gateway-0.1.0.jar bin/
