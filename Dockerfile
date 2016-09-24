@@ -26,7 +26,8 @@ WORKDIR /opt/resin-demo-apps/resin-open-gateway
 RUN mvn -U clean install
 
 RUN cp target/open-gateway-0.1.0.jar bin/ && \
-    chmod +x bin/run-og.sh
+    cd bin && \
+    chmod +x run-og.sh
 
-CMD ["./bin/run-og.sh"]
+CMD ["./run-og.sh"]
 
