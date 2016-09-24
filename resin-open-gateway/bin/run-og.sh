@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd bin/
+
 java -Djava.library.path=natives/armhf/osgi \
      -Dlogback.configurationFile=config/logback/logback.xml \
      -cp open-gateway-0.1.0.jar: \
