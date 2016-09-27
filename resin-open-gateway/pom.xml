@@ -171,7 +171,7 @@
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>com.microrisc.opengateway.apps.monitoring.OpenGatewayApp</mainClass>
+                            <mainClass>com.microrisc.opengateway.apps.monitoring.OpenGatewayO2ITSApp</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

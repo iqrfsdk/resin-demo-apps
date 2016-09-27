@@ -28,9 +28,7 @@ import com.microrisc.simply.Node;
 import com.microrisc.simply.SimplyException;
 import com.microrisc.simply.compounddevices.CompoundDeviceObject;
 import com.microrisc.simply.devices.protronix.dpa22x.CO2Sensor;
-import com.microrisc.simply.devices.protronix.dpa22x.VOCSensor;
 import com.microrisc.simply.devices.protronix.dpa22x.types.CO2SensorData;
-import com.microrisc.simply.devices.protronix.dpa22x.types.VOCSensorData;
 import com.microrisc.simply.errors.CallRequestProcessingError;
 import com.microrisc.simply.errors.CallRequestProcessingErrorType;
 import com.microrisc.simply.iqrf.dpa.DPA_ResponseCode;
@@ -61,13 +59,16 @@ import org.json.simple.parser.ParseException;
  * @author Rostislav Spinar
  * @author Michal Konopa
  */
-public class OpenGatewayApp {
+public class OpenGatewayIntelimentsApp {
 
     // references for DPA
     private static DPA_Simply dpaSimply = null;
     
-    // references for MQTT
+    // references for MQTT communication
     private static MqttCommunicator mqttCommunicator = null;
+    
+    // references for MQTT configuration
+    private static MqttConfiguration mqttConfiguration = null;
     
     // application related references
     private static ApplicationConfiguration appConfiguration = null;
@@ -87,50 +88,56 @@ public class OpenGatewayApp {
                 releaseUsedResources();
             }
         }));
-        
-        // Simply initialization
-        dpaSimply = getDPA_Simply("Simply-CDC.properties");
-        //dpaSimply = getDPA_Simply("Simply-SPI.properties");
-        
-        // loading MQTT configuration
-        MqttConfiguration mqttConfiguration = null;
-        try {
-            mqttConfiguration = loadMqttConfiguration("Mqtt.json");
-        } catch ( Exception ex ) {
-            printMessageAndExit("Error in loading MQTT configuration: " + ex);
-        } 
-        
-        // to be configured from config file
-        String topicProtronix = "/std/sensors/protronix/";
-        String topicDevtech = "/std/actuators/devtech/";
-        String topicIqhome = "/std/sensors/iqhome/";
-        String topicTeco = "/lp/actuators/teco/";
-
-        MqttTopics mqttTopics = new MqttTopics(
-                mqttConfiguration.getGwId(),
-                topicProtronix,
-                topicProtronix + "errors/",
-                topicDevtech,
-                topicDevtech + "errors/",
-                topicIqhome,
-                topicIqhome + "errors/",
-                topicTeco,
-                topicTeco + "errors/"
-        );
-
-        mqttCommunicator = new MqttCommunicator(mqttConfiguration);
 
         // loading application configuration
         try {
             appConfiguration = loadApplicationConfiguration("App.json");
         } catch ( Exception ex ) {
-            printMessageAndExit("Error in loading application configuration: " + ex);
+           printMessageAndExit("Error in loading application configuration: " + ex);
+        }         
+
+        // Simply initialization
+        if(appConfiguration.getCommunicationInterface().equalsIgnoreCase("cdc")) {
+            dpaSimply = getDPA_Simply("Simply-CDC.properties");
+        }
+        else if(appConfiguration.getCommunicationInterface().equalsIgnoreCase("spi")) {
+            dpaSimply = getDPA_Simply("Simply-SPI.properties");
+        }
+        else {
+           printMessageAndExit("No supported communication interface: " + appConfiguration.getCommunicationInterface());
+        }
+        
+        // loading MQTT configuration
+        try {
+            mqttConfiguration = loadMqttConfiguration("Mqtt.json");
+        } catch ( Exception ex ) {
+           printMessageAndExit("Error in loading MQTT configuration: " + ex);
         } 
+        
+        // to be configured from config file
+        String topicProtronix = mqttConfiguration.getRootTopic() + "/iqrf/iaq/protronix";
+        String topicDevtech = "";
+        String topicIqhome = "";
+        String topicTeco = "";
+
+        MqttTopics mqttTopics = new MqttTopics(
+                mqttConfiguration.getGwId(),
+                topicProtronix,
+                topicProtronix + "/errors/",
+                topicDevtech,
+                topicDevtech + "/errors/",
+                topicIqhome,
+                topicIqhome + "/errors/",
+                topicTeco,
+                topicTeco + "/errors/"
+        );
+
+        mqttCommunicator = new MqttCommunicator(mqttConfiguration);
         
         // getting reference to IQRF DPA network to use
         Network dpaNetwork = dpaSimply.getNetwork("1", Network.class);
         if ( dpaNetwork == null ) {
-            printMessageAndExit("DPA Network doesn't exist");
+           printMessageAndExit("DPA Network doesn't exist");
         }
         
         // reference to map of all nodes in the network
@@ -278,16 +285,6 @@ public class OpenGatewayApp {
                     }
                 break;
 
-                case "voc-t-h":
-                    VOCSensor vocSensor = entry.getValue().getDeviceObject(VOCSensor.class);
-                    if ( vocSensor != null ) {
-                        sensorsMap.put(entry.getKey(), (CompoundDeviceObject) vocSensor);
-                        System.out.println("Device type: " + sensorInfo.getType());
-                    } else {
-                        System.err.println("VOC sensor not found on node: " + nodeId);
-                    }
-                break;
-
                 default:
                     printMessageAndExit("Device type not supported:" + sensorInfo.getType());
                 break;
@@ -360,48 +357,6 @@ public class OpenGatewayApp {
                     } 
                 break;
 
-                case "voc-t-h":
-                    compDevObject = entry.getValue();
-                    if ( compDevObject == null ) {
-                        System.err.println("Sensor not found. Id: " + entry.getKey());
-                        break;
-                    }
-                    
-                    if ( !(compDevObject instanceof VOCSensor) ) {
-                        System.err.println("Bad type of sensor. Got: " + compDevObject.getClass() 
-                            + ", expected: " + VOCSensor.class
-                        );
-                        break;
-                    }
-                    
-                    VOCSensor vocSensor = (VOCSensor)compDevObject;
-                    VOCSensorData vocSensorData = vocSensor.get();
-                    if ( vocSensorData != null ) {
-                        dataFromSensors.put(entry.getKey(), vocSensorData);
-                    } else {
-                        CallRequestProcessingState requestState = vocSensor.getCallRequestProcessingStateOfLastCall();
-                        if ( requestState == ERROR ) {
-                            // general call error
-                            CallRequestProcessingError error = vocSensor.getCallRequestProcessingErrorOfLastCall();
-                            System.err.println("Error while getting data from VOC sensor: " + error);
-                            
-                            String mqttError = MqttFormatter.formatError( String.valueOf(error) );
-                            mqttPublishErrors(nodeId, mqttTopics, mqttError);
-                            
-                            // specific call error
-                            if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
-                                DPA_AdditionalInfo dpaAddInfo = vocSensor.getDPA_AdditionalInfoOfLastCall();
-                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                                System.err.println("Error while getting data from VOC sensor, DPA error: " + dpaResponseCode);
-                            }
-                        } else {
-                            System.err.println(
-                                "Could not get data from VOC sensor. State of the sensor: " + requestState
-                            );
-                        }
-                    }
-                break;
-
                 default:
                     printMessageAndExit("Device type not supported:" + sensorInfo.getType());
                 break;
@@ -454,77 +409,27 @@ public class OpenGatewayApp {
                     }
                     
                     // packet id
-                    pid++;
+                    //pid++;
                     
-                    String moduleId = getModuleId(entry.getKey(), osInfoMap);
+                    //String moduleId = getModuleId(entry.getKey(), osInfoMap);
+                    String clientId = mqttConfiguration.getClientId();
                     
-                    String mqttDataCO2 = MqttFormatter
-                                .formatCO2(
+                    String mqttDataProtronix = MqttFormatter
+                                .formatDeviceProtronix(
+                                    nodeId,
+                                    clientId,
                                     String.valueOf(co2SensorData.getCo2()), 
-                                    moduleId
-                                );
-                    String mqttDataTemperature = MqttFormatter
-                                .formatTemperature(
                                     sensorDataFormat.format(co2SensorData.getTemperature()), 
-                                    moduleId
-                                );
-                    
-                    String mqttDataHumidity = MqttFormatter
-                                .formatHumidity(
-                                    sensorDataFormat.format(co2SensorData.getHumidity()), 
-                                    moduleId
+                                    sensorDataFormat.format(co2SensorData.getHumidity())
                                 );
 
-                    mqttSensorData.add(mqttDataCO2);
-                    mqttSensorData.add(mqttDataTemperature);
-                    mqttSensorData.add(mqttDataHumidity);
-
-                    mqttAllSensorsData.put(entry.getKey(), mqttSensorData);
-                break;
-
-                case "voc-t-h":
-                    VOCSensorData vocSensorData = (VOCSensorData)entry.getValue();
-                    if ( vocSensorData == null ) {
-                        System.out.println(
-                            "No data received from device, check log for details "
-                            + "about protronix uart data"
-                        );
-                        mqttAllSensorsData.put(entry.getKey(), null);
-                        break;
-                    }
-                    
-                    // packet id
-                    pid++;
-
-                    moduleId = getModuleId(entry.getKey(), osInfoMap);
-
-                    String mqttDataVOC = MqttFormatter
-                                .formatVOC(
-                                    String.valueOf(vocSensorData.getVoc()), 
-                                    moduleId
-                                );
-                    mqttDataTemperature = MqttFormatter
-                                .formatTemperature(
-                                    sensorDataFormat.format(vocSensorData.getTemperature()), 
-                                    moduleId
-                                );
-                    
-                    mqttDataHumidity = MqttFormatter
-                                .formatHumidity(
-                                    sensorDataFormat.format(vocSensorData.getHumidity()), 
-                                    moduleId
-                                );
-
-                    mqttSensorData.add(mqttDataVOC);
-                    mqttSensorData.add(mqttDataTemperature);
-                    mqttSensorData.add(mqttDataHumidity);
-
+                    mqttSensorData.add(mqttDataProtronix);
                     mqttAllSensorsData.put(entry.getKey(), mqttSensorData);
                 break;
 
                 default:
                     printMessageAndExit("Device type not supported:" + sensorInfo.getType());
-                break;    
+                break;
             }                      
         }
         
@@ -548,7 +453,7 @@ public class OpenGatewayApp {
 
                 for ( String mqttData : entry.getValue() ) {
                     try {
-                        mqttCommunicator.publish(mqttTopics.getStdSensorsProtronix() + entry.getKey(), 2, mqttData.getBytes());
+                       mqttCommunicator.publish(mqttTopics.getStdSensorsProtronix(), 2, mqttData.getBytes());
                     } catch ( MqttException ex ) {
                         System.err.println("Error while publishing sync dpa message: " + ex);
                     }
@@ -582,15 +487,16 @@ public class OpenGatewayApp {
         return new MqttConfiguration(
             (String) jsonObject.get("protocol"), 
             (String) jsonObject.get("broker"), 
-            (long) jsonObject.get("port"), 
-            (String) jsonObject.get("clientid"), 
-            (String) jsonObject.get("gwid"), 
-            (boolean) jsonObject.get("cleansession"), 
-            (boolean) jsonObject.get("quitemode"), 
-            (boolean) jsonObject.get("ssl"), 
-            (String) jsonObject.get("certfile"), 
-            (String) jsonObject.get("username"), 
-            (String) jsonObject.get("password")
+            (long) jsonObject.get("port"),
+            (String) jsonObject.get("clientid"),
+            (String) jsonObject.get("gwid"),
+            (boolean) jsonObject.get("cleansession"),
+            (boolean) jsonObject.get("quitemode"),
+            (boolean) jsonObject.get("ssl"),
+            (String) jsonObject.get("certfile"),
+            (String) jsonObject.get("username"),
+            (String) jsonObject.get("password"),
+            (String) jsonObject.get("roottopic")
         );
     }
     
@@ -621,7 +527,8 @@ public class OpenGatewayApp {
         }
         
         return new ApplicationConfiguration(
-                (long) appJsonObjects.get("pollingPeriod"),  
+                (long) appJsonObjects.get("pollingPeriod"),
+                (String) appJsonObjects.get("communicationInterface"),
                 devicesInfos
         );
     }
