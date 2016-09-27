@@ -25,9 +25,4 @@ WORKDIR /opt/resin-demo-apps/resin-open-gateway
 
 RUN mvn -U clean install
 
-RUN cp target/open-gateway-0.1.0.jar ./
-
-ENV INITSYSTEM=on
-
-CMD ["bash", "run-og.sh"]
-
+CMD ["/usr/bin/java", "-Djava.library.path=natives/armhf/osgi", -Dlogback.configurationFile=config/logback/logback.xml, "-jar", "target/open-gateway-0.1.0.jar"]
