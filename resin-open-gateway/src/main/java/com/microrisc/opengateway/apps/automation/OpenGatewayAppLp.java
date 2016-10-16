@@ -20,7 +20,7 @@ import com.microrisc.opengateway.async.AsyncDataForMqttCreator;
 import com.microrisc.opengateway.async.AsyncDataForMqttCreatorException;
 import com.microrisc.opengateway.config.ApplicationConfiguration;
 import com.microrisc.opengateway.config.DeviceInfo;
-import com.microrisc.opengateway.dpa.DPA_CompleteResult;
+import com.microrisc.opengateway.dpa.DPA_Result;
 import com.microrisc.opengateway.mqtt.MqttCommunicator;
 import com.microrisc.opengateway.mqtt.MqttConfiguration;
 import com.microrisc.opengateway.mqtt.MqttFormatter;
@@ -113,7 +113,11 @@ public class OpenGatewayAppLp {
         @Override
         public void onAsynchronousMessage(DPA_AsynchronousMessage message) {
             System.out.println("New asynchronous message arrived.");
-            OpenGatewayAppLp.asynchronousMessages.add(message);
+            
+            synchronized (synchroNewAsyncMessage) {
+                OpenGatewayAppLp.asynchronousMessages.add(message);
+                synchroNewAsyncMessage.notify();
+            }
         }
     }
     
@@ -144,6 +148,7 @@ public class OpenGatewayAppLp {
                 }
                 
                 while ( !asynchronousMessages.isEmpty() ) {
+                    System.out.println("Async worker thread - message processing");
                     DPA_AsynchronousMessage asyncMessage = asynchronousMessages.poll();
                     processAsynchronousMessage(asyncMessage, mqttTopics);
                 }
@@ -191,25 +196,14 @@ public class OpenGatewayAppLp {
             printMessageAndExit("Error in loading MQTT configuration: " + ex);
         }
 
-        // to be configured from config file
-        String topicProtronix = "/std/sensors/protronix/";
-        String topicDevtech = "/std/actuators/devtech/";
-        String topicIqhome = "/std/sensors/iqhome/";
-        String topicTeco = "/lp/actuators/teco/";
-
-        mqttTopics = new MqttTopics(
-                mqttConfiguration.getGwId(),
-                topicProtronix,
-                topicProtronix + "errors/",
-                topicDevtech,
-                topicDevtech + "errors/",
-                topicIqhome,
-                topicIqhome + "errors/",
-                topicTeco,
-                topicTeco + "errors/"
-        );
+        // topics initialization
+        mqttTopics =  new MqttTopics.Builder().gwId(mqttConfiguration.getGwId()).build();
 
         mqttCommunicator = new MqttCommunicator(mqttConfiguration);
+        mqttCommunicator.subscribe(mqttTopics.getStdActuatorsAustyn(), 2);
+        mqttCommunicator.subscribe(mqttTopics.getStdActuatorsDevtech(), 2);
+        mqttCommunicator.subscribe(mqttTopics.getStdActuatorsDatmolux(), 2);
+        mqttCommunicator.subscribe(mqttTopics.getStdActuatorsTeco(), 2);
 
         // getting reference to IQRF DPA network to use
         Network dpaNetwork = dpaSimply.getNetwork("1", Network.class);
@@ -240,7 +234,7 @@ public class OpenGatewayAppLp {
 
         // main application loop
         while (true) {
-            //getAndPublishDevicesData(devicesMap, mqttTopics, osInfoMap);
+            getAndPublishDevicesData(devicesMap, mqttTopics, osInfoMap);
             Thread.sleep(appConfiguration.getPollingPeriod() * 1000);
         }
     }
@@ -297,7 +291,8 @@ public class OpenGatewayAppLp {
 
     // processes specified asynchronous message
     private static void processAsynchronousMessage(
-            DPA_AsynchronousMessage dpaAsyncMessage, MqttTopics mqttTopics) {
+            DPA_AsynchronousMessage dpaAsyncMessage, MqttTopics mqttTopics
+    ) {
 
         AsyncDataForMqtt asyncDataForMqtt = null;
 
@@ -306,6 +301,8 @@ public class OpenGatewayAppLp {
         
         try {
             asyncDataForMqtt = AsyncDataForMqttCreator.create(dpaAsyncMessage, null);
+            System.out.println("Async node id: " + asyncDataForMqtt.getNodeId());
+
         } catch (AsyncDataForMqttCreatorException ex) {
             System.err.println("Error while creating async message: " + ex.getMessage());
             return;
@@ -314,23 +311,26 @@ public class OpenGatewayAppLp {
         if (asyncDataForMqtt.getNodeId().equals("4")) {
             
             mqttTopic =  mqttTopics.getLpActuatorsTeco();
-            mqttMessage = MqttFormatter.formatAsyncDataForMqtt(asyncDataForMqtt);
+            mqttMessage = MqttFormatter.formatAsyncDataForMqtt(asyncDataForMqtt, 0);
             
             // inform web gui about event
             publishMqttMessage(mqttTopic, mqttMessage);
 
             // app logic
             mqttTopic =  mqttTopics.getStdActuatorsDevtech();
-            if(asyncDataForMqtt.getModuleState().equals("up")) {
-                mqttMessage = MqttFormatter.formatDeviceDevtech("on");
+            if(asyncDataForMqtt.getModuleState().equals("leftup")) {
+                mqttMessage = MqttFormatter.formatDeviceDevtech("on", 0);
             }
-            else if (asyncDataForMqtt.getModuleState().equals("down")) {
-                mqttMessage = MqttFormatter.formatDeviceDevtech("off");
+            else if (asyncDataForMqtt.getModuleState().equals("leftdown")) {
+                mqttMessage = MqttFormatter.formatDeviceDevtech("off", 0);
             }
             
             // based on async event it sends request to std network via broker 
             publishMqttMessage(mqttTopic, mqttMessage);
         }
+        
+        
+        
     }
     
     // gets data from sensors and publishes them
@@ -368,7 +368,7 @@ public class OpenGatewayAppLp {
     
     // tests, if specified node ID is in valid interval
     private static boolean isNodeIdInValidInterval(long nodeId) {
-        return ( nodeId <= 0 || nodeId > appConfiguration.getNumberOfDevices() );
+        return ( nodeId >0 && nodeId <= appConfiguration.getNumberOfDevices() );
     }
     
     // returns reference to map of OS info objects for specified nodes map
@@ -379,7 +379,7 @@ public class OpenGatewayAppLp {
             int nodeId = Integer.parseInt(entry.getKey());
             
             // node ID must be within valid interval
-            if ( isNodeIdInValidInterval(nodeId) ) {
+            if ( !isNodeIdInValidInterval(nodeId) ) {
                 continue;
             }
                 
@@ -400,11 +400,13 @@ public class OpenGatewayAppLp {
                         CallRequestProcessingError error = os.getCallRequestProcessingErrorOfLastCall();
                         System.err.println("Getting OS info failed: " + error);
                         
-                        if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
+                        if ( error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL ) {
                             // specific call error
                             DPA_AdditionalInfo dpaAddInfo = os.getDPA_AdditionalInfoOfLastCall();
-                            DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                            System.err.println("Getting OS info failed on the node, DPA error: " + dpaResponseCode);
+                            if ( dpaAddInfo != null ) {
+                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
+                                System.err.println("Getting OS info failed on the node, DPA error: " + dpaResponseCode); 
+                            }
                         }
                     } else {
                         System.err.println("Getting OS info hasn't been processed yet: " + procState);
@@ -433,7 +435,7 @@ public class OpenGatewayAppLp {
             int nodeId = Integer.parseInt(entry.getKey());
             
             // node ID must be within valid interval
-            if ( isNodeIdInValidInterval(nodeId) ) {
+            if ( !isNodeIdInValidInterval(nodeId) ) {
                 continue;
             }
             
@@ -447,7 +449,7 @@ public class OpenGatewayAppLp {
                         devicesMap.put(entry.getKey(), (DeviceObject) custom);
                         System.out.println("Device type: " + deviceInfo.getType());
                     } else {
-                        System.err.println("Custom device periferal not found on node: " + nodeId);
+                        System.err.println("Custom device peripheral not found on node: " + nodeId);
                     }
                 break;
 
@@ -462,13 +464,14 @@ public class OpenGatewayAppLp {
     
     // returns data from devices as specicied by map
     private static Map<String, Object> getDataFromDevices(
-            Map<String, DeviceObject> devicesMap, MqttTopics mqttTopics ) {
+            Map<String, DeviceObject> devicesMap, MqttTopics mqttTopics 
+    ) {
         
         // data from devices
         Map<String, Object> dataFromDevices = new HashMap<>();
         
         // mqtt data for 1 sensor
-        List<DPA_CompleteResult> deviceData = new LinkedList<>();
+        List<DPA_Result> deviceData = new LinkedList<>();
         
         for ( Map.Entry<String, DeviceObject> entry : devicesMap.entrySet() ) {
             
@@ -478,7 +481,7 @@ public class OpenGatewayAppLp {
             int nodeId = Integer.parseInt(entry.getKey());
             
             // node ID must be within valid interval
-            if ( isNodeIdInValidInterval(nodeId) ) {
+            if ( !isNodeIdInValidInterval(nodeId) ) {
                 continue;
             }
             
@@ -509,67 +512,79 @@ public class OpenGatewayAppLp {
                     // custom dpa peripheral
                     Custom custom = (Custom)devObject;
 
-                    // getting temperature
-                    short[] tempData = custom.send(peripheralIdIqhome, cmdIdTemp, data);
-                    
-                    if ( tempData != null) {
-                        DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
-                        DPA_CompleteResult dpaCR = new DPA_CompleteResult(tempData, null, dpaAddInfo);
-                        deviceData.add(dpaCR);
-                    } else {
-                        CallRequestProcessingState requestState = custom.getCallRequestProcessingStateOfLastCall();
-                        if ( requestState == ERROR ) {       
-                            // call error    
-                            CallRequestProcessingError error = custom.getCallRequestProcessingErrorOfLastCall();
-                            System.err.println("Error while getting data from custom iqhome device: " + error);
-                            
-                            String mqttError = MqttFormatter.formatError( String.valueOf(error) );
-                            mqttPublishErrors(nodeId, mqttTopics, mqttError);
-                            
-                            // specific call error
-                            if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
-                                DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
-                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                                System.err.println("Error while getting data from custom iqhome device, DPA error: " + dpaResponseCode);
-                            }
+                    // getting temperature, 3 attempts
+                    for (int i = 0; i < 3; i++) {
+                        System.out.println("Getting temperature, attempt: " + i);
+                        short[] tempData = custom.send(peripheralIdIqhome, cmdIdTemp, data);
+
+                        if ( tempData != null) {
+                            DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
+                            DPA_Result dpaCR = new DPA_Result(tempData, null, dpaAddInfo, null);
+                            deviceData.add(dpaCR);
+                            break;
                         } else {
-                            System.err.println(
-                                "Could not get data from custom iqhome device. State of the device: " + requestState
-                            );
+                            CallRequestProcessingState requestState = custom.getCallRequestProcessingStateOfLastCall();
+                            if ( requestState == ERROR ) {       
+                                // call error    
+                                CallRequestProcessingError error = custom.getCallRequestProcessingErrorOfLastCall();
+                                System.err.println("Error while getting data from custom iqhome device: " + error);
+
+                                String mqttError = MqttFormatter.formatError( String.valueOf(error) );
+                                mqttPublishErrors(nodeId, mqttTopics, mqttError);
+
+                                // specific call error
+                                if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
+                                    DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
+                                    if ( dpaAddInfo != null ) {
+                                        DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
+                                        System.err.println("Error while getting data from custom iqhome device, DPA error: " + dpaResponseCode); 
+                                    }
+                                }
+                            } else {
+                                System.err.println(
+                                    "Could not get data from custom iqhome device. State of the device: " + requestState
+                                );
+                            }
                         }
                     }
                     
-                    // getting temperature
-                    short[] humData = custom.send(peripheralIdIqhome, cmdIdHum, data);
-                    
-                    if ( humData != null) {
-                        DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
-                        DPA_CompleteResult dpaCR = new DPA_CompleteResult(humData, null, dpaAddInfo);
-                        deviceData.add(dpaCR);
-                    } else {
-                        CallRequestProcessingState requestState = custom.getCallRequestProcessingStateOfLastCall();
-                        if ( requestState == ERROR ) {       
-                            // call error    
-                            CallRequestProcessingError error = custom.getCallRequestProcessingErrorOfLastCall();
-                            System.err.println("Error while getting data from custom iqhome device: " + error);
-                            
-                            String mqttError = MqttFormatter.formatError( String.valueOf(error) );
-                            mqttPublishErrors(nodeId, mqttTopics, mqttError);
-                            
-                            // specific call error
-                            if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
-                                DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
-                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                                System.err.println("Error while getting data from custom iqhome device, DPA error: " + dpaResponseCode);
-                            }
+                    // getting humidity, 3 attempts
+                    for (int i = 0; i < 3; i++) {
+                        System.out.println("Getting humidity, attempt: " + i);
+                        short[] humData = custom.send(peripheralIdIqhome, cmdIdHum, data);
+
+                        if ( humData != null) {
+                            DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
+                            DPA_Result dpaCR = new DPA_Result(humData, null, dpaAddInfo, null);
+                            deviceData.add(dpaCR);
+                            break;
                         } else {
-                            System.err.println(
-                                "Could not get data from custom iqhome device. State of the device: " + requestState
-                            );
+                            CallRequestProcessingState requestState = custom.getCallRequestProcessingStateOfLastCall();
+                            if ( requestState == ERROR ) {       
+                                // call error    
+                                CallRequestProcessingError error = custom.getCallRequestProcessingErrorOfLastCall();
+                                System.err.println("Error while getting data from custom iqhome device: " + error);
+
+                                String mqttError = MqttFormatter.formatError( String.valueOf(error) );
+                                mqttPublishErrors(nodeId, mqttTopics, mqttError);
+
+                                // specific call error
+                                if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
+                                    DPA_AdditionalInfo dpaAddInfo = custom.getDPA_AdditionalInfoOfLastCall();
+                                    if ( dpaAddInfo != null ) {
+                                        DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
+                                        System.err.println("Error while getting data from custom iqhome device, DPA error: " + dpaResponseCode); 
+                                    }
+                                }
+                            } else {
+                                System.err.println(
+                                    "Could not get data from custom iqhome device. State of the device: " + requestState
+                                );
+                            }
                         }
                     }
                     
-                    if(!deviceData.isEmpty()) {
+                    if(!deviceData.isEmpty() && (deviceData.size() == 2)) {
                         dataFromDevices.put(entry.getKey(), deviceData);
                     }
                 break;
@@ -593,7 +608,7 @@ public class OpenGatewayAppLp {
         for ( Map.Entry<String, Object> entry : dataFromDevicesMap.entrySet() ) {
             int nodeId = Integer.parseInt(entry.getKey());
             
-            if ( isNodeIdInValidInterval(nodeId) ) {
+            if ( !isNodeIdInValidInterval(nodeId) ) {
                 continue;
             }
             
@@ -607,7 +622,7 @@ public class OpenGatewayAppLp {
             
             switch ( deviceInfo.getType().toLowerCase() ) {
                 case "custom":
-                    List<DPA_CompleteResult> deviceData = (List<DPA_CompleteResult>)entry.getValue();
+                    List<DPA_Result> deviceData = (List<DPA_Result>)entry.getValue();
                     
                     if ( deviceData == null ) {
                         System.err.println(
@@ -620,32 +635,33 @@ public class OpenGatewayAppLp {
                                        
                     String moduleId = getModuleId(entry.getKey(), osInfoMap);
                     
-                    DPA_CompleteResult receivedDataTemp = deviceData.get(0);
-                    DPA_CompleteResult receivedDataHum = deviceData.get(1);
+                    DPA_Result receivedDataTemp = deviceData.get(0);
+                    DPA_Result receivedDataHum = deviceData.get(1);
                     
-                    if (receivedDataTemp.getOpResult().length == 0 && receivedDataHum.getOpResult().length == 0) {
+                    short[] receivedTemperature = (short[])receivedDataTemp.getOpResult();
+                    short[] receivedHumidity = (short[])receivedDataHum.getOpResult();
+                    
+                    if ( receivedTemperature.length == 0 && receivedHumidity.length == 0) {
                         System.err.print("No received data from custom on the node " + nodeId);
                         mqttAllDevicesData.put(entry.getKey(), null);
                         break;
-                    } 
-                    else 
-                    {
+                    } else {
                         System.out.print("Received temperature from custom on the node " + nodeId + ": ");
-                        for (Short readResultLoop : receivedDataTemp.getOpResult()) {
+                        for ( Short readResultLoop : receivedTemperature ) {
                             System.out.print(Integer.toHexString(readResultLoop).toUpperCase() + " ");
                         }
                         System.out.println();
 
-                        float temperature = (receivedDataTemp.getOpResult()[1] << 8) + receivedDataTemp.getOpResult()[0];
+                        float temperature = (receivedTemperature[1] << 8) + receivedTemperature[0];
                         temperature = temperature / 16;
 
                         System.out.print("Received humidity from custom on the node " + nodeId + ": ");
-                        for (Short readResultLoop : receivedDataHum.getOpResult()) {
+                        for ( Short readResultLoop : receivedHumidity ) {
                             System.out.print(Integer.toHexString(readResultLoop).toUpperCase() + " ");
                         }
                         System.out.println();
 
-                        float humidity = (receivedDataHum.getOpResult()[1] << 8) + receivedDataHum.getOpResult()[0];
+                        float humidity = (receivedHumidity[1] << 8) + receivedHumidity[0];
                         humidity = Math.round(humidity / 16);
                         
                         String mqttDataIqhome = MqttFormatter
@@ -654,7 +670,8 @@ public class OpenGatewayAppLp {
                                         moduleId,
                                         receivedDataHum.getDpaAddInfo(),
                                         String.valueOf(sensorDataFormat.format(temperature)),
-                                        String.valueOf(sensorDataFormat.format(humidity))
+                                        String.valueOf(sensorDataFormat.format(humidity)),
+                                        0
                                 );
 
                         mqttDeviceData.add(mqttDataIqhome);
@@ -687,7 +704,7 @@ public class OpenGatewayAppLp {
         for (Map.Entry<String, List<String>> entry : dataFromsDevicesMqtt.entrySet()) {
             int nodeId = Integer.parseInt(entry.getKey());
 
-            if (isNodeIdInValidInterval(nodeId)) {
+            if (!isNodeIdInValidInterval(nodeId)) {
                 continue;
             }
 
@@ -727,7 +744,7 @@ public class OpenGatewayAppLp {
     // publish error messages to specified MQTT topics
     private static void mqttPublishErrors(int nodeId, MqttTopics mqttTopics, String errorMessage) {
         try {
-            mqttCommunicator.publish(mqttTopics.getLpSensorsIqhomeErrors() + nodeId, 2, errorMessage.getBytes());
+            mqttCommunicator.publish(mqttTopics.getLpSensorsIqHomeErrors() + nodeId, 2, errorMessage.getBytes());
         } catch (MqttException ex) {
             System.err.println("Error while publishing error message: " + ex);
         }

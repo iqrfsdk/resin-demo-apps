@@ -17,9 +17,11 @@
 package com.microrisc.opengateway.mqtt;
 
 import com.microrisc.opengateway.apps.automation.OpenGatewayAppStd;
-import com.microrisc.opengateway.dpa.DPA_CompleteResult;
+import com.microrisc.opengateway.dpa.DPA_Request;
+import com.microrisc.opengateway.dpa.DPA_Result;
+import com.microrisc.opengateway.dpa.ResponseData;
+import com.microrisc.opengateway.web.WebRequestParser;
 import com.microrisc.opengateway.web.WebRequestParserException;
-import com.microrisc.opengateway.web.WebResponseConvertor;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -33,6 +35,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.sql.Timestamp;
+import java.util.logging.Level;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
@@ -95,7 +98,42 @@ public class MqttCommunicator implements MqttCallback {
     private Thread reconnectionThread;
     
     private static final Logger log = LoggerFactory.getLogger(MqttCommunicator.class);
+    
+    
+    // sets connection options
+    private void setConnectionOptions(
+            boolean isCleanSession, String password, String userName, String certFile
+    ) throws CertificateException, IOException, KeyStoreException, 
+            NoSuchAlgorithmException, KeyManagementException 
+    {
+        conOpt.setCleanSession(isCleanSession);
+            
+        if ( !password.isEmpty() ) {
+            conOpt.setPassword(password.toCharArray());
+        }
+        if ( !userName.isEmpty() ) {
+            conOpt.setUserName(userName);
+        }
 
+        if ( !certFile.isEmpty() ) {
+            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+
+            InputStream certFileInputStream = fullStream(certFile);
+            Certificate ca = cf.generateCertificate(certFileInputStream);
+
+            KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+            keyStore.load(null);
+            keyStore.setCertificateEntry("ca", ca);
+
+            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            trustManagerFactory.init(keyStore);
+
+            SSLContext sslContext = SSLContext.getInstance("TLSv1");
+            sslContext.init(null, trustManagerFactory.getTrustManagers(), new SecureRandom());
+            conOpt.setSocketFactory(sslContext.getSocketFactory());
+        }
+    }
+    
     /**
      * Constructs an instance of the sample client wrapper
      *
@@ -124,32 +162,7 @@ public class MqttCommunicator implements MqttCallback {
             // Construct the connection options object that contains connection parameters
             // such as cleanSession and LWT
             conOpt = new MqttConnectOptions();
-            conOpt.setCleanSession(clean);
-            
-            if (!password.isEmpty()) {
-                conOpt.setPassword(this.password.toCharArray());
-            }
-            if (!userName.isEmpty()) {
-                conOpt.setUserName(this.userName);
-            }
-            
-            if (!certFile.isEmpty()) {
-                CertificateFactory cf = CertificateFactory.getInstance("X.509");
-
-                InputStream certFileInputStream = fullStream(certFile);
-                Certificate ca = cf.generateCertificate(certFileInputStream);
-
-                KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
-                keyStore.load(null);
-                keyStore.setCertificateEntry("ca", ca);
-
-                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                trustManagerFactory.init(keyStore);
-
-                SSLContext sslContext = SSLContext.getInstance("TLSv1");
-                sslContext.init(null, trustManagerFactory.getTrustManagers(), new SecureRandom());
-                conOpt.setSocketFactory(sslContext.getSocketFactory());
-            }
+            setConnectionOptions(clean, password, userName, certFile);
 
             // Construct an MQTT blocking mode client
             client = new MqttClient(this.brokerUrl, mqttConfig.getClientId(), dataStore);
@@ -162,7 +175,6 @@ public class MqttCommunicator implements MqttCallback {
             
             client.connect(conOpt);
             log("Connected");
-
         } catch (MqttException e) {
             e.printStackTrace();
             log("Unable to set up client: " + e.toString());
@@ -223,7 +235,7 @@ public class MqttCommunicator implements MqttCallback {
     }
 
     /**
-     * Subscribe to a topic on an MQTT server Once subscribed this method waits
+     * Subscribe to a topic on an MQTT server. Once subscribed this method waits
      * for the messages to arrive from the server that match the subscription.
      * It continues listening for messages until the enter key is pressed.
      *
@@ -317,30 +329,52 @@ public class MqttCommunicator implements MqttCallback {
                            + "  Message:\t" + new String(message.getPayload())
                            + "  QoS:\t" + message.getQos());
         
-        // get data as string
-        final String msg = new String(message.getPayload());
+        // message data
+        final String messageData = new String(message.getPayload());
         
-        // getting DPA result
-        DPA_CompleteResult dpaResult = null;
+        DPA_Request dpaRequest = null;
+        DPA_Result result = null;
         try {
-            dpaResult = OpenGatewayAppStd.sendWebRequestToDpaNetwork(topic, msg);
-        } catch ( InterruptedException ex ) {
-            // sending response to error topic
+            dpaRequest = WebRequestParser.parse( messageData );
+            result = OpenGatewayAppStd.sendWebRequestToDpaNetwork(dpaRequest, topic);
         } catch ( WebRequestParserException ex ) {
-            // sending response to error topic
+            System.err.println("Error while parsing web request: " + ex);
+            return;
         } 
         
-        // converting DPA result into web response form
-        String webResponse = WebResponseConvertor.convert(dpaResult);
-        
-        // TODO: sending of the result
-
-/*
-        if(resultToBeSent != null) {
-            publish(Topics.ACTUATORS_RESPONSES_LEDS, 2, resultToBeSent.getBytes());
+        // no result - usually in the case of error
+        if ( result == null ) {
+            System.err.println("Null result from DPA.");
+            return;
         }
-*/
         
+        // creating data of response to publish
+        ResponseData responseData = createResponseData(dpaRequest, result);
+        
+        // converting DPA result into web response form
+        String webResponse = MqttFormatter.formatResponseData(responseData);
+        try {
+            publish(topic, 2, webResponse.getBytes());
+        } catch ( MqttException ex ) {
+            System.err.println("Error while publishing web response message: " + ex);
+        }
+        
+    }
+    
+    // creates response data for publishing
+    private ResponseData createResponseData(DPA_Request request, DPA_Result result) {
+        return new ResponseData(
+                request.getN(), 
+                request.getSv(),
+                String.valueOf(request.getPid()), 
+                result.getRequest().getNadr(), 
+                String.valueOf(result.getRequest().getPnum()),
+                result.getRequest().getPcmd(),
+                String.valueOf(result.getDpaAddInfo().getHwProfile()),
+                String.valueOf(result.getDpaAddInfo().getResponseCode()),
+                String.valueOf(result.getDpaAddInfo().getDPA_Value()),
+                result.getRequest().getModuleId()
+        );
     }
     
     /**

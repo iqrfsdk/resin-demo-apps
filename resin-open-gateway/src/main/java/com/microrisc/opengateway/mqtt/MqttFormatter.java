@@ -17,6 +17,7 @@
 package com.microrisc.opengateway.mqtt;
 
 import com.microrisc.opengateway.async.AsyncDataForMqtt;
+import com.microrisc.opengateway.dpa.ResponseData;
 import com.microrisc.simply.iqrf.dpa.v22x.devices.Custom;
 import com.microrisc.simply.iqrf.dpa.v22x.devices.IO;
 import com.microrisc.simply.iqrf.dpa.v22x.protocol.DPA_ProtocolProperties;
@@ -29,10 +30,6 @@ import com.microrisc.simply.iqrf.dpa.v22x.types.DPA_AdditionalInfo;
  */
 public final class MqttFormatter {
     
-    static int pidAsync;
-    static int pidDevtech;
-    static int pidIqhome;
-
     /**
      * Returns formated value of CO2.
      *
@@ -94,16 +91,48 @@ public final class MqttFormatter {
     }
     
     /**
+     * Returns formatted value of specified response data.
+     * 
+     * @param responseData response data
+     * @return formatted value of response data
+     */
+    public static String formatResponseData(ResponseData responseData) {
+        String levelStr = "";
+        if ( 
+            (responseData.getN().toLowerCase().equals("custom")) 
+            && 
+            (responseData.getSv().toLowerCase().equals("up") || responseData.getSv().toLowerCase().equals("down"))
+        ) {
+            levelStr = ", \"v\":" + "0";
+        }
+                
+        String firstLine = "{\"e\":[{\"n\":\"" + responseData.getN().toLowerCase() 
+                + "\"," + "\"sv\":" + "\"" + responseData.getSv().toLowerCase()
+                + levelStr
+                + "\"}],";
+        
+        return firstLine
+                + "\"iqrf\":[{\"pid\":" + responseData.getPid() + "," 
+                + "\"dpa\":\"resp\"," + "\"nadr\":" + responseData.getNodeId() + ","
+                + "\"pnum\":" + responseData.getPnum() + ","
+                + "\"pcmd\":" + "\"" + responseData.getPcmd() + "\","
+                + "\"hwpid\":" + responseData.getHwpId()
+                + "," + "\"rcode\":" + "\"" + responseData.getResponseCode() + "\","
+                + "\"dpavalue\":" + responseData.getDpaValue() + "}],"
+                + "\"bn\":" + "\"urn:dev:mid:" + responseData.getModuleId() + "\""
+                + "}";
+    }
+    
+    /**
      * Returns formated DPA asynchronous message data.
      *
      * @param asyncMsgForMqtt DPA asynchronous message data for MQTT
+     * @param pid identifier of asynchronous packet
      * @return MQTT form of {@code asyncMsgForMqtt}
      */
-    public static String formatAsyncDataForMqtt(
-            AsyncDataForMqtt asyncMsgForMqtt) {
-        
-        return "{\"e\":[{\"n\":\"switch\"," + "\"sv\":" + asyncMsgForMqtt.getModuleState() + "}],"
-                + "\"iqrf\":[{\"pid\":" + pidAsync++ + "," + "\"dpa\":\"resp\"," + "\"nadr\":" + asyncMsgForMqtt.getNodeId() + ","
+    public static String formatAsyncDataForMqtt(AsyncDataForMqtt asyncMsgForMqtt, int pid) {
+        return "{\"e\":[{\"n\":\"switch\"," + "\"sv\":" + "\"" + asyncMsgForMqtt.getModuleState() + "\"}],"
+                + "\"iqrf\":[{\"pid\":" + pid++ + "," + "\"dpa\":\"resp\"," + "\"nadr\":" + asyncMsgForMqtt.getNodeId() + ","
                 + "\"pnum\":" + DPA_ProtocolProperties.PNUM_Properties.USER_PERIPHERAL_START + "," + "\"pcmd\":" + "\"" + Custom.MethodID.SEND.name().toLowerCase() + "\","
                 + "\"hwpid\":" + asyncMsgForMqtt.getHwpid() +  "}],"
                 + "\"bn\":" + "\"urn:dev:mid:" + "unknown" + "\""
@@ -114,15 +143,15 @@ public final class MqttFormatter {
      * Returns formated value of Devtech request message.
      *
      * @param state to be set
+     * @param pidDevtech identifier of packet
      * @return formated MQTT message
      */
-    public static String formatDeviceDevtech(String state) {
-        
+    public static String formatDeviceDevtech(String state, int pidDevtech) {
         int devtechNodeId = 0x03;
         int devtechHWPID = 0xFFFF;
         String devtechModuleId = "8100401F";
 
-        return "{\"e\":[{\"n\":\"io\"," + "\"sv\":" + state + "}],"
+        return "{\"e\":[{\"n\":\"io\"," + "\"sv\":" + "\"" + state + "\"}],"
                 + "\"iqrf\":[{\"pid\":" + pidDevtech++ + "," + "\"dpa\":\"req\"," + "\"nadr\":" + devtechNodeId + ","
                 + "\"pnum\":" + DPA_ProtocolProperties.PNUM_Properties.IO + "," + "\"pcmd\":" + "\"" + IO.MethodID.SET_OUTPUT_STATE.name().toLowerCase() + "\","
                 + "\"hwpid\":" + devtechHWPID + "}],"
@@ -138,17 +167,21 @@ public final class MqttFormatter {
      * @param dpaAddInfo
      * @param temperature
      * @param humidity
+     * @param pid identifier of packet
      * 
      * @return formated MQTT message
      */
-    public static String formatDeviceIqhome(int nodeId, String moduleId, DPA_AdditionalInfo dpaAddInfo, String temperature, String humidity) {
-
-        return "{\"e\":["
+    public static String formatDeviceIqhome(
+            int nodeId, String moduleId, DPA_AdditionalInfo dpaAddInfo, 
+            String temperature, String humidity, int pid
+    ) {
+        return 
+                "{\"e\":["
                 + "{\"n\":\"temperature\"," + "\"u\":\"Cel\"," + "\"v\":" + temperature + "},"
                 + "{\"n\":\"humidity\"," + "\"u\":\"%RH\"," + "\"v\":" + humidity + "}"
                 + "],"
                 + "\"iqrf\":["
-                + "{\"pid\":" + pidIqhome++ + "," + "\"dpa\":\"resp\"," + "\"nadr\":" + nodeId + ","
+                + "{\"pid\":" + pid++ + "," + "\"dpa\":\"resp\"," + "\"nadr\":" + nodeId + ","
                 + "\"pnum\":" + DPA_ProtocolProperties.PNUM_Properties.USER_PERIPHERAL_START + "," + "\"pcmd\":" + "\"" + Custom.MethodID.SEND.name().toLowerCase() + "\","
                 + "\"hwpid\":" + dpaAddInfo.getHwProfile() + "," + "\"rcode\":" + "\"" + dpaAddInfo.getResponseCode().name().toLowerCase() + "\","
                 + "\"dpavalue\":" + dpaAddInfo.getDPA_Value() + "}"
@@ -170,11 +203,12 @@ public final class MqttFormatter {
      */
     public static String formatDeviceProtronix(int nodeId, String clientId, String co2, String temperature, String humidity) {
 
-        String time = Long.toString(System.currentTimeMillis());
+        String timeSec = Long.toString( System.currentTimeMillis() / 1000);
+        String timeMsec = Long.toString( System.currentTimeMillis() % 1000);
 
         return "["
-                + "{\"bn\":" + "\"urn:clid:" + clientId + ":ba:" + nodeId + "\"," + "\"bt\":" + time + "},"
-                + "{\"n\":\"co2\"," + "\"u\":\"Cel\"," + "\"ppm\":" + co2 + "},"
+                + "{\"bn\":" + "\"urn:clid:" + clientId + ":ba:" + nodeId + "\"," + "\"bt\":" + timeSec + "." + timeMsec + "},"
+                + "{\"n\":\"co2\"," + "\"u\":\"ppm\"," + "\"v\":" + co2 + "},"
                 + "{\"n\":\"humidity\"," + "\"u\":\"%RH\"," + "\"v\":" + humidity + "},"
                 + "{\"n\":\"temperature\"," + "\"u\":\"Cel\"," + "\"v\":" + temperature + "}"
                 + "]";
@@ -187,9 +221,8 @@ public final class MqttFormatter {
      * @return formated error message
      */
     public static String formatError(String error) {
-
         return "{\"e\":["
-                + "{\"n\":\"error\"," + "\"u\":\"description\"," + "\"v\":" + error + "}"
+                + "{\"n\":\"error\"," + "\"u\":\"description\"," + "\"v\":" + "\"" + error + "\"}"
                 + "]}";
     }
 }

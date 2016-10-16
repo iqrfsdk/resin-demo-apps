@@ -114,23 +114,11 @@ public class OpenGatewayO2ITSApp {
             printMessageAndExit("Error in loading MQTT configuration: " + ex);
         } 
         
-        // to be configured from config file
-        String topicProtronix = "/std/sensors/protronix/";
-        String topicDevtech = "";
-        String topicIqhome = "";
-        String topicTeco = "";
-
-        MqttTopics mqttTopics = new MqttTopics(
-                mqttConfiguration.getGwId(),
-                topicProtronix,
-                topicProtronix + "errors/",
-                topicDevtech,
-                topicDevtech + "errors/",
-                topicIqhome,
-                topicIqhome + "errors/",
-                topicTeco,
-                topicTeco + "errors/"
-        );
+        // topics initialization
+        MqttTopics mqttTopics =  new MqttTopics.Builder().gwId(mqttConfiguration.getGwId())
+                .stdSensorsProtronix("/std/sensors/protronix/")
+                .stdSensorsProtronixErrors("/std/sensors/protronix/errors/")
+                .build();
 
         mqttCommunicator = new MqttCommunicator(mqttConfiguration);
         
@@ -153,7 +141,7 @@ public class OpenGatewayO2ITSApp {
         Map<String, CompoundDeviceObject> sensorsMap = getSensorsMap(nodesMap);
         
         // main application loop
-        while( true ) {
+        while ( true ) {
             getAndPublishSensorData(sensorsMap, mqttTopics, osInfoMap);
             Thread.sleep(appConfiguration.getPollingPeriod() * 1000);
         }
@@ -237,8 +225,10 @@ public class OpenGatewayO2ITSApp {
                         if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
                             // specific call error
                             DPA_AdditionalInfo dpaAddInfo = os.getDPA_AdditionalInfoOfLastCall();
-                            DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                            System.err.println("Getting OS info failed on the node, DPA error: " + dpaResponseCode);
+                            if ( dpaAddInfo != null ) {
+                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
+                                System.err.println("Getting OS info failed on the node, DPA error: " + dpaResponseCode);
+                            }
                         }
                     } else {
                         System.err.println("Getting OS info hasn't been processed yet: " + procState);
@@ -354,10 +344,12 @@ public class OpenGatewayO2ITSApp {
                             mqttPublishErrors(nodeId, mqttTopics, mqttError);
                             
                             // specific call error
-                            if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
+                            if ( error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL ) {
                                 DPA_AdditionalInfo dpaAddInfo = co2Sensor.getDPA_AdditionalInfoOfLastCall();
-                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                                System.err.println("Error while getting data from CO2 sensor, DPA error: " + dpaResponseCode);
+                                if ( dpaAddInfo != null ) {
+                                    DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
+                                    System.err.println("Error while getting data from CO2 sensor, DPA error: " + dpaResponseCode);  
+                                }
                             }
                         } else {
                             System.err.println(
@@ -398,8 +390,10 @@ public class OpenGatewayO2ITSApp {
                             // specific call error
                             if (error.getErrorType() == CallRequestProcessingErrorType.NETWORK_INTERNAL) {
                                 DPA_AdditionalInfo dpaAddInfo = vocSensor.getDPA_AdditionalInfoOfLastCall();
-                                DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
-                                System.err.println("Error while getting data from VOC sensor, DPA error: " + dpaResponseCode);
+                                if ( dpaAddInfo != null ) {
+                                    DPA_ResponseCode dpaResponseCode = dpaAddInfo.getResponseCode();
+                                    System.err.println("Error while getting data from VOC sensor, DPA error: " + dpaResponseCode);
+                                }
                             }
                         } else {
                             System.err.println(
@@ -587,18 +581,18 @@ public class OpenGatewayO2ITSApp {
         JSONObject jsonObject = (JSONObject) obj;
         
         return new MqttConfiguration(
-            (String) jsonObject.get("protocol"), 
-            (String) jsonObject.get("broker"), 
-            (long) jsonObject.get("port"),
-            (String) jsonObject.get("clientid"),
-            (String) jsonObject.get("gwid"),
-            (boolean) jsonObject.get("cleansession"),
-            (boolean) jsonObject.get("quitemode"),
-            (boolean) jsonObject.get("ssl"),
-            (String) jsonObject.get("certfile"),
-            (String) jsonObject.get("username"),
-            (String) jsonObject.get("password"),
-            (String) jsonObject.get("roottopicpath")
+                (String) jsonObject.get("protocol"),
+                (String) jsonObject.get("broker"),
+                (long) jsonObject.get("port"),
+                (String) jsonObject.get("clientid"),
+                (String) jsonObject.get("gwid"),
+                (boolean) jsonObject.get("cleansession"),
+                (boolean) jsonObject.get("quitemode"),
+                (boolean) jsonObject.get("ssl"),
+                (String) jsonObject.get("certfile"),
+                (String) jsonObject.get("username"),
+                (String) jsonObject.get("password"),
+                (String) jsonObject.get("roottopic")
         );
     }
     
