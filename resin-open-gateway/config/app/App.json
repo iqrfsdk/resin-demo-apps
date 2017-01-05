@@ -2,7 +2,16 @@
     "pollingPeriod":30,
     "communicationInterface":"cdc",
     "devices":
-        [
-            {"device":1, "manufacturer":"protronix", "type":"co2-t-h"}
-        ]
+    [
+    	{"device":1, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":2, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":3, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":4, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":5, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":6, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":7, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":8, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":9, "manufacturer":"protronix", "type":"co2-t-h"},
+	{"device":10, "manufacturer":"protronix", "type":"co2-t-h"}
+    ]
 }

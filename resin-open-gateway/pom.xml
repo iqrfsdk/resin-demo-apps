@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.microrisc</groupId>
     <artifactId>open-gateway</artifactId>
-    <version>0.1.0</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <repositories>
@@ -166,12 +166,12 @@
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>2.4</version>
                 <configuration>
-                    <finalName>open-gateway-0.1.0</finalName>
+                    <finalName>open-gateway-1.0.0</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                     <archive>
                         <manifest>
                             <addClasspath>true</addClasspath>
-                            <mainClass>com.microrisc.opengateway.apps.monitoring.OpenGatewayO2ITSApp</mainClass>
+                            <mainClass>com.microrisc.simply.demos.monitoring.App</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

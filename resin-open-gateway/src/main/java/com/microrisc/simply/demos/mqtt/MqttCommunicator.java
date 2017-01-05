@@ -14,14 +14,8 @@
  * limitations under the License.
  */
 
-package com.microrisc.opengateway.mqtt;
+package com.microrisc.simply.demos.mqtt;
 
-import com.microrisc.opengateway.apps.automation.OpenGatewayAppStd;
-import com.microrisc.opengateway.dpa.DPA_Request;
-import com.microrisc.opengateway.dpa.DPA_Result;
-import com.microrisc.opengateway.dpa.ResponseData;
-import com.microrisc.opengateway.web.WebRequestParser;
-import com.microrisc.opengateway.web.WebRequestParserException;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -35,7 +29,6 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.sql.Timestamp;
-import java.util.logging.Level;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
@@ -51,10 +44,10 @@ import org.slf4j.LoggerFactory;
 /**
  *
  * @author Rostislav Spinar
+ * @author Michal Konopa
  */
 public class MqttCommunicator implements MqttCallback {
-
-    // Private instance variables
+    
     private MqttClient client;
     private String brokerUrl;
     private boolean quietMode;
@@ -95,10 +88,10 @@ public class MqttCommunicator implements MqttCallback {
             log("Connected");
         }
     };
+    
     private Thread reconnectionThread;
     
     private static final Logger log = LoggerFactory.getLogger(MqttCommunicator.class);
-    
     
     // sets connection options
     private void setConnectionOptions(
@@ -329,52 +322,6 @@ public class MqttCommunicator implements MqttCallback {
                            + "  Message:\t" + new String(message.getPayload())
                            + "  QoS:\t" + message.getQos());
         
-        // message data
-        final String messageData = new String(message.getPayload());
-        
-        DPA_Request dpaRequest = null;
-        DPA_Result result = null;
-        try {
-            dpaRequest = WebRequestParser.parse( messageData );
-            result = OpenGatewayAppStd.sendWebRequestToDpaNetwork(dpaRequest, topic);
-        } catch ( WebRequestParserException ex ) {
-            System.err.println("Error while parsing web request: " + ex);
-            return;
-        } 
-        
-        // no result - usually in the case of error
-        if ( result == null ) {
-            System.err.println("Null result from DPA.");
-            return;
-        }
-        
-        // creating data of response to publish
-        ResponseData responseData = createResponseData(dpaRequest, result);
-        
-        // converting DPA result into web response form
-        String webResponse = MqttFormatter.formatResponseData(responseData);
-        try {
-            publish(topic, 2, webResponse.getBytes());
-        } catch ( MqttException ex ) {
-            System.err.println("Error while publishing web response message: " + ex);
-        }
-        
-    }
-    
-    // creates response data for publishing
-    private ResponseData createResponseData(DPA_Request request, DPA_Result result) {
-        return new ResponseData(
-                request.getN(), 
-                request.getSv(),
-                String.valueOf(request.getPid()), 
-                result.getRequest().getNadr(), 
-                String.valueOf(result.getRequest().getPnum()),
-                result.getRequest().getPcmd(),
-                String.valueOf(result.getDpaAddInfo().getHwProfile()),
-                String.valueOf(result.getDpaAddInfo().getResponseCode()),
-                String.valueOf(result.getDpaAddInfo().getDPA_Value()),
-                result.getRequest().getModuleId()
-        );
     }
     
     /**

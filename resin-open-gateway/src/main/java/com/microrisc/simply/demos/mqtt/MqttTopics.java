@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.microrisc.opengateway.mqtt;
+package com.microrisc.simply.demos.mqtt;
 
 /**
  * MQTT topics.
