@@ -374,6 +374,12 @@
     </logger>
 
     
+    <!-- MQTT related classes -->
+    <logger name="com.microrisc.simply.demos.mqtt.MqttCommunicator" level="DEBUG">
+            <appender-ref ref="FILE" />
+    </logger>
+    
+    
     <!-- root -->
     <root level="OFF">
         <!-- appender-ref ref="STDOUT" / -->
