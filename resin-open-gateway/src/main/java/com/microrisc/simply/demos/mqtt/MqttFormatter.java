@@ -39,7 +39,7 @@ public final class MqttFormatter {
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
                 + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
-                + "\"bt\":" + timestamp + "\""
+                + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
 
@@ -58,7 +58,7 @@ public final class MqttFormatter {
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
                 + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
-                + "\"bt\":" + timestamp + "\""
+                + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
 
@@ -77,7 +77,7 @@ public final class MqttFormatter {
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
                 + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
-                + "\"bt\":" + timestamp + "\""
+                + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
 
@@ -96,7 +96,7 @@ public final class MqttFormatter {
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
                 + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
-                + "\"bt\":" + timestamp + "\""
+                + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
     
@@ -115,7 +115,7 @@ public final class MqttFormatter {
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
                 + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
-                + "\"bt\":" + timestamp + "\""
+                + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
     
@@ -135,7 +135,7 @@ public final class MqttFormatter {
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
                 + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
-                + "\"bt\":" + timestamp + "\""
+                + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
 }
