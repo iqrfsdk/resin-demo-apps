@@ -1,5 +1,5 @@
 {
-    "pollingPeriod":30,
+    "pollingPeriod":90,
     "communicationInterface":"cdc",
     "devices":
     [

@@ -29,13 +29,17 @@ public final class MqttFormatter {
      *
      * @param co2 CO2 value
      * @param moduleId ID of source module
+     * @param nadr source node address
+     * @param timestamp timestamp
      * @return formated value of CO2
      */
-    public static String formatCO2(String co2, String moduleId) {
+    public static String formatCO2(String co2, String moduleId, String nadr, String timestamp) {
         return "{\"e\":["
                 + "{\"n\":\"co2\"," + "\"u\":\"PPM\"," + "\"v\":" + co2 + "}"
                 + "],"
-                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\""
+                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
+                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"bt\":" + timestamp + "\""
                 + "}";
     }
 
@@ -44,13 +48,17 @@ public final class MqttFormatter {
      *
      * @param voc VOC value
      * @param moduleId ID of source module
+     * @param nadr source node address
+     * @param timestamp timestamp
      * @return formated value of VOC
      */
-    public static String formatVOC(String voc, String moduleId) {
+    public static String formatVOC(String voc, String moduleId, String nadr, String timestamp) {
         return "{\"e\":["
                 + "{\"n\":\"voc\"," + "\"u\":\"PPM\"," + "\"v\":" + voc + "}"
                 + "],"
-                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\""
+                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
+                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"bt\":" + timestamp + "\""
                 + "}";
     }
 
@@ -59,13 +67,17 @@ public final class MqttFormatter {
      *
      * @param temperature temperature
      * @param moduleId ID of source module
+     * @param nadr source node address
+     * @param timestamp timestamp
      * @return formated value of temperature
      */
-    public static String formatTemperature(String temperature, String moduleId) {
+    public static String formatTemperature(String temperature, String moduleId, String nadr, String timestamp) {
         return "{\"e\":["
                 + "{\"n\":\"temperature\"," + "\"u\":\"Cel\"," + "\"v\":" + temperature + "}"
                 + "],"
-                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\""
+                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
+                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"bt\":" + timestamp + "\""
                 + "}";
     }
 
@@ -74,13 +86,17 @@ public final class MqttFormatter {
      *
      * @param humidity humidity
      * @param moduleId ID of source module
+     * @param nadr source node address
+     * @param timestamp timestamp
      * @return formated value of humidity
      */
-    public static String formatHumidity(String humidity, String moduleId) {
+    public static String formatHumidity(String humidity, String moduleId, String nadr, String timestamp) {
         return "{\"e\":["
                 + "{\"n\":\"humidity\"," + "\"u\":\"%RH\"," + "\"v\":" + humidity + "}"
                 + "],"
-                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\""
+                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
+                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"bt\":" + timestamp + "\""
                 + "}";
     }
     
@@ -89,13 +105,17 @@ public final class MqttFormatter {
      *
      * @param rssi RSSI
      * @param moduleId ID of source module
+     * @param nadr source node address
+     * @param timestamp timestamp
      * @return formated value of RSSI
      */
-    public static String formatRssi(String rssi, String moduleId) {
+    public static String formatRssi(String rssi, String moduleId, String nadr, String timestamp) {
         return "{\"e\":["
                 + "{\"n\":\"rssi\"," + "\"u\":\"dBm\"," + "\"v\":" + rssi + "}"
                 + "],"
-                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\""
+                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
+                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"bt\":" + timestamp + "\""
                 + "}";
     }
     
@@ -104,11 +124,18 @@ public final class MqttFormatter {
      * Returns formated value of specified error string.
      *
      * @param error error message
+     * @param moduleId ID of source module
+     * @param nadr source node address
+     * @param timestamp timestamp
      * @return formated error message
      */
-    public static String formatError(String error) {
+    public static String formatError(String error, String moduleId, String nadr, String timestamp) {
         return "{\"e\":["
                 + "{\"n\":\"error\"," + "\"u\":\"description\"," + "\"v\":" + "\"" + error + "\"}"
-                + "]}";
+                + "],"
+                + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
+                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"bt\":" + timestamp + "\""
+                + "}";
     }
 }
