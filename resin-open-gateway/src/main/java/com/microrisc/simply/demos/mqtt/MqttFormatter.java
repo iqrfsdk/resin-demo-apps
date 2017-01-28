@@ -38,7 +38,7 @@ public final class MqttFormatter {
                 + "{\"n\":\"co2\"," + "\"u\":\"PPM\"," + "\"v\":" + co2 + "}"
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
-                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"ba\":" + "\"urn:dev:nadr:" + nadr + "\","
                 + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
@@ -57,7 +57,7 @@ public final class MqttFormatter {
                 + "{\"n\":\"voc\"," + "\"u\":\"PPM\"," + "\"v\":" + voc + "}"
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
-                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"ba\":" + "\"urn:dev:nadr:" + nadr + "\","
                 + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
@@ -76,7 +76,7 @@ public final class MqttFormatter {
                 + "{\"n\":\"temperature\"," + "\"u\":\"Cel\"," + "\"v\":" + temperature + "}"
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
-                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"ba\":" + "\"urn:dev:nadr:" + nadr + "\","
                 + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
@@ -95,7 +95,7 @@ public final class MqttFormatter {
                 + "{\"n\":\"humidity\"," + "\"u\":\"%RH\"," + "\"v\":" + humidity + "}"
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
-                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"ba\":" + "\"urn:dev:nadr:" + nadr + "\","
                 + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
@@ -114,7 +114,7 @@ public final class MqttFormatter {
                 + "{\"n\":\"rssi\"," + "\"u\":\"dBm\"," + "\"v\":" + rssi + "}"
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
-                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"ba\":" + "\"urn:dev:nadr:" + nadr + "\","
                 + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
@@ -134,7 +134,7 @@ public final class MqttFormatter {
                 + "{\"n\":\"error\"," + "\"u\":\"description\"," + "\"v\":" + "\"" + error + "\"}"
                 + "],"
                 + "\"bn\":" + "\"urn:dev:mid:" + moduleId + "\","
-                + "\"bn\":" + "\"urn:dev:nadr:" + nadr + "\","
+                + "\"ba\":" + "\"urn:dev:nadr:" + nadr + "\","
                 + "\"bt\":" + "\"" + timestamp + "\""
                 + "}";
     }
